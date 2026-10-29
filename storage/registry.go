@@ -38,6 +38,10 @@ type Options struct {
 	AllowPrivateEndpoints bool
 }
 
+// Off is the kind that turns object storage off in any build, whatever it
+// registered: its backend's Open returns ErrOff. No backend registers it.
+const Off = "none"
+
 // Backend opens the object store of a provider row.
 type Backend interface {
 	Open(ctx context.Context, p Provider) (ObjectStore, error)
@@ -77,9 +81,9 @@ func Register(kind string, s stability.Stability, factory Factory) {
 
 // NewBackend builds a backend of kind with its registered Factory, which
 // reads its configuration through decode. A kind nobody registered is an
-// error that names the kinds there are. The empty kind in a build that
-// registered none is object storage off: its backend's Open returns
-// ErrNoBackend.
+// error that names the kinds there are. Off is object storage off, whose
+// backend's Open returns ErrOff, and so is the empty kind in a build that
+// registered none, whose backend's Open returns ErrNoBackend.
 func NewBackend(kind string, decode func(v any) error) (Backend, error) {
 	return backends.open(kind, decode)
 }
@@ -96,14 +100,14 @@ func Open(ctx context.Context, kind string, decode func(v any) error, p Provider
 }
 
 // CheckBackendKind returns nil when NewBackend builds a backend of kind (a
-// registered kind, or the empty kind in a build that registered none), and
-// otherwise the error NewBackend returns for it.
+// registered kind, Off, or the empty kind in a build that registered none),
+// and otherwise the error NewBackend returns for it.
 func CheckBackendKind(kind string) error { return backends.check(kind) }
 
 // DefaultBackendKind is the kind storage.kind means when it is not set: the
 // one kind the build registered, or the empty kind (object storage off) when
 // it registered none. With two or more it is empty, and CheckBackendKind
-// asks for one to be set.
+// asks for one, or Off, to be set.
 func DefaultBackendKind() string { return backends.defaultKind() }
 
 // BackendKinds returns the registered kinds, sorted.
@@ -116,6 +120,9 @@ func BackendStability(kind string) (stability.Stability, bool) { return backends
 func (r *registry) register(kind string, s stability.Stability, factory Factory) {
 	if kind == "" {
 		panic("storage: Register with an empty kind")
+	}
+	if kind == Off {
+		panic(fmt.Sprintf("storage: Register %q: the kind that turns object storage off", kind))
 	}
 	if err := s.Check(); err != nil {
 		panic(fmt.Sprintf("storage: Register %q: %v", kind, err))
@@ -147,8 +154,11 @@ func (r *registry) open(kind string, decode func(v any) error) (Backend, error) 
 	if err := r.check(kind); err != nil {
 		return nil, err
 	}
-	if kind == "" {
-		return off{}, nil
+	switch kind {
+	case "":
+		return off{err: ErrNoBackend}, nil
+	case Off:
+		return off{err: ErrOff}, nil
 	}
 	r.mu.RLock()
 	factory := r.factories[kind]
@@ -159,10 +169,10 @@ func (r *registry) open(kind string, decode func(v any) error) (Backend, error) 
 func (r *registry) check(kind string) error {
 	names := r.kinds()
 	switch {
-	case kind == "" && len(names) == 0:
+	case kind == Off, kind == "" && len(names) == 0:
 		return nil
 	case kind == "":
-		return fmt.Errorf("not set; this build has %s: set one", strings.Join(names, ", "))
+		return fmt.Errorf("not set; this build has %s: set one, or %q to turn object storage off", strings.Join(names, ", "), Off)
 	case slices.Contains(names, kind):
 		return nil
 	}
@@ -187,10 +197,11 @@ func (r *registry) kinds() []string {
 	return out
 }
 
-// off is the backend of a build with no object storage backend.
-type off struct{}
+// off is the backend with object storage off: a build with no object
+// storage backend (ErrNoBackend), or storage.kind Off (ErrOff).
+type off struct{ err error }
 
-func (off) Open(context.Context, Provider) (ObjectStore, error) { return nil, ErrNoBackend }
+func (o off) Open(context.Context, Provider) (ObjectStore, error) { return nil, o.err }
 
 // unknown is the one error for a kind nobody registered.
 func (r *registry) unknown(kind string) error {

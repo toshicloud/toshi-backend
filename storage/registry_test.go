@@ -196,11 +196,31 @@ func TestRegistryDefaultKindAndOff(t *testing.T) {
 	if got := r.defaultKind(); got != "" {
 		t.Fatalf("defaultKind with two registered = %q, want empty", got)
 	}
-	want := "not set; this build has azure, s3: set one"
+	want := `not set; this build has azure, s3: set one, or "none" to turn object storage off`
 	if err := r.check(""); err == nil || err.Error() != want {
 		t.Fatalf("check of the empty kind with two registered = %v, want %q", err, want)
 	}
 	if _, err := r.open("", nil); err == nil || err.Error() != want {
 		t.Fatalf("open of the empty kind with two registered = %v, want %q", err, want)
+	}
+}
+
+// storage.kind "none" turns object storage off whatever the build
+// registered, and no backend can take that kind.
+func TestRegistryOffKind(t *testing.T) {
+	var r registry
+	r.register("s3", beta, nopFactory)
+	if err := r.check(Off); err != nil {
+		t.Fatalf("check(%q) = %v", Off, err)
+	}
+	backend, err := r.open(Off, nil)
+	if err != nil {
+		t.Fatalf("open(%q) = %v", Off, err)
+	}
+	if _, err := backend.Open(context.Background(), Provider{}); !errors.Is(err, ErrOff) {
+		t.Fatalf("Open with object storage off = %v, want ErrOff", err)
+	}
+	if got, want := mustPanic(t, func() { r.register(Off, beta, nopFactory) }), `storage: Register "none": the kind that turns object storage off`; got != want {
+		t.Fatalf("panic = %v, want %q", got, want)
 	}
 }

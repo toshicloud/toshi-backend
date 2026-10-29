@@ -24,4 +24,7 @@ var (
 	// ErrNoBackend means the build links no object storage backend:
 	// object storage is off and no provider's bucket opens.
 	ErrNoBackend = errors.New("this build has no object storage backend")
+	// ErrOff means storage.kind is "none" (Off): object storage is off and
+	// no provider's bucket opens.
+	ErrOff = errors.New(`object storage is off: storage.kind is "none"`)
 )
