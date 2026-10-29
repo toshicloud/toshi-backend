@@ -3,6 +3,7 @@
 package keyprovider
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -11,13 +12,27 @@ import (
 	"go.toshicloud.io/product/stability"
 )
 
-// The key provider registry: each engine package registers its kind from its
-// init, and the program that serves keys builds the kind its configuration
-// names, so nothing outside the engines picks one by name.
+// The key provider registry: each key provider package registers its kind
+// from its init, and the control plane builds the kinds its configuration
+// names, so nothing outside the key providers picks one by name.
 
 // Factory builds a key provider from its table in the configuration: decode
-// reads the table into the provider's own configuration struct.
-type Factory func(decode func(v any) error) (Wrapper, error)
+// reads the table into the provider's own configuration struct, and host is
+// what the control plane gives it besides.
+type Factory func(decode func(v any) error, host Host) (Wrapper, error)
+
+// Host is what the control plane gives a key provider besides its table.
+type Host struct {
+	// SelfToken returns a workload identity token that names the control
+	// plane itself, for audience, freshly signed by the deployment's
+	// issuer: what a provider signs in to its key service with, such as
+	// an AWS STS web identity exchange. It is nil when the deployment has
+	// no issuer.
+	SelfToken func(ctx context.Context, audience string) (string, error)
+	// Issuer is the issuer URL those tokens name, empty when SelfToken is
+	// nil.
+	Issuer string
+}
 
 // Registry is a set of kinds and their factories. The package's own one,
 // which Register fills from the engines' inits, serves the package's
@@ -32,20 +47,21 @@ type Registry struct {
 
 var kinds Registry
 
-// Register makes factory the key provider engine of kind, the name of its
-// table in the key provider's configuration, at stability s. An engine calls it
-// from its package's init, so a binary has the kinds of the engines it
-// links. It panics when kind is empty, s does not pass stability's Check,
-// factory is nil or kind is registered already: each is a programming error.
+// Register makes factory the key provider of kind, the name of its table
+// under [secrets] in the control plane's configuration, at stability s. A
+// key provider calls it from its package's init, so a binary has the kinds
+// of the key providers it links. It panics when kind is empty, s does not
+// pass stability's Check, factory is nil or kind is registered already:
+// each is a programming error.
 func Register(kind string, s stability.Stability, factory Factory) {
 	kinds.Register(kind, s, factory)
 }
 
 // NewWrapper builds the key of kind with its registered Factory, which reads
-// its table through decode. A kind nobody registered is an error that names
-// the kinds there are.
-func NewWrapper(kind string, decode func(v any) error) (Wrapper, error) {
-	return kinds.NewWrapper(kind, decode)
+// its table through decode and is given host. A kind nobody registered is an
+// error that names the kinds there are.
+func NewWrapper(kind string, decode func(v any) error, host Host) (Wrapper, error) {
+	return kinds.NewWrapper(kind, decode, host)
 }
 
 // CheckKind returns nil when kind is registered. The empty kind is an error
@@ -97,7 +113,7 @@ func (r *Registry) KindStability(kind string) (stability.Stability, bool) {
 }
 
 // NewWrapper is the package's NewWrapper for r.
-func (r *Registry) NewWrapper(kind string, decode func(v any) error) (Wrapper, error) {
+func (r *Registry) NewWrapper(kind string, decode func(v any) error, host Host) (Wrapper, error) {
 	if kind == "" {
 		kind = r.DefaultKind()
 	}
@@ -107,7 +123,7 @@ func (r *Registry) NewWrapper(kind string, decode func(v any) error) (Wrapper, e
 	r.mu.RLock()
 	factory := r.factories[kind]
 	r.mu.RUnlock()
-	return factory(decode)
+	return factory(decode, host)
 }
 
 // CheckKind is the package's CheckKind for r.

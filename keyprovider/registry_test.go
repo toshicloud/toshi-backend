@@ -17,7 +17,7 @@ func (nopWrapper) Unwrap(context.Context, []byte, Wrapped) ([]byte, error) {
 	return nil, ErrSealed
 }
 
-func nopFactory(func(v any) error) (Wrapper, error) { return nopWrapper{}, nil }
+func nopFactory(func(v any) error, Host) (Wrapper, error) { return nopWrapper{}, nil }
 
 // registryOf returns a registry of the kinds given, each built by
 // nopFactory.
@@ -34,7 +34,7 @@ func registryOf(kinds ...string) *Registry {
 // one kind or refused when there are two or more.
 func TestRegistryOpensByKind(t *testing.T) {
 	r := registryOf("transit", "aws_kms")
-	if _, err := r.NewWrapper("transit", func(any) error { return nil }); err != nil {
+	if _, err := r.NewWrapper("transit", func(any) error { return nil }, Host{}); err != nil {
 		t.Fatalf("open transit: %v", err)
 	}
 	if err := r.CheckKind("gcp_kms"); err == nil || err.Error() != `"gcp_kms" is not one of aws_kms, transit` {
