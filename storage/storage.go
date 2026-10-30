@@ -5,6 +5,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -90,4 +91,17 @@ type ObjectStore interface {
 	// Check proves the bucket is usable: it heads the bucket, refuses a
 	// versioned one, then uploads, heads and deletes a probe object.
 	Check(ctx context.Context) error
+}
+
+// ObjectStreamer is implemented by an ObjectStore that can read and write
+// an object's bytes itself, so the control plane can rewrite an upload
+// before it is stored. It is optional: a store without it cannot complete
+// an upload that must be rewritten, such as a browser trace.
+type ObjectStreamer interface {
+	// Get returns the object's body, or ErrNotFound. With ifMatch set it
+	// fails with ErrPrecondition when the object's etag differs.
+	Get(ctx context.Context, key, ifMatch string) (io.ReadCloser, error)
+	// Put writes size bytes of body to key with contentType. body is read
+	// twice: once to sign it and once to send it.
+	Put(ctx context.Context, key string, body io.ReadSeeker, size int64, contentType string) error
 }
