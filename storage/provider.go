@@ -142,6 +142,11 @@ func (p Provider) Validate() error {
 	if p.RootPrefix != "" && !rootPattern.MatchString(p.RootPrefix) {
 		return fmt.Errorf("storage: root_prefix %q is not a lowercase path without a leading or trailing slash", p.RootPrefix)
 	}
+	// A local_disk provider's bytes are the host agent's, so it needs no
+	// credential; one given is still checked.
+	if p.Mode == ModeLocalDisk && p.Credentials == (CredentialRef{}) {
+		return nil
+	}
 	return p.Credentials.Validate()
 }
 
