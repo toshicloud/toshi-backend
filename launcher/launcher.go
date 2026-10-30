@@ -123,6 +123,16 @@ type NATEgress interface {
 	EgressEcho(ctx context.Context, instanceID string) (string, error)
 }
 
+// GuestRefusals is what a launcher adds whose guests report why they
+// refused to start the runner before they power off. *ec2.Launcher and
+// *gce.Launcher implement it.
+type GuestRefusals interface {
+	// GuestRefusal returns the reason an instance's guest reported for
+	// refusing to start the runner; empty when it reported none, and for an
+	// instance the cloud does not know.
+	GuestRefusal(ctx context.Context, instanceID string) (string, error)
+}
+
 // ErrNoNAT is NATAddresses' error for a subnet that does not route through
 // a NAT; the error wrapping it says why.
 var ErrNoNAT = errors.New("no NAT route")
