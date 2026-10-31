@@ -33,10 +33,12 @@ type Host struct {
 	// no owner.
 	HostID    string
 	Workspace string
-	// Region is the region the instances run in; on GCP the zone's region.
+	// Region is the region the instances run in; on GCP the zone's region,
+	// on Azure the location.
 	Region string
 	// RoleARN and ExternalID name the role in the workspace's account (AWS);
-	// on GCP ExternalID is what the project metadata must name.
+	// on GCP ExternalID is what the project metadata must name, on Azure
+	// what the resource groups' toshi-external-id tag must name.
 	RoleARN    string
 	ExternalID string
 	// Image is the machine image the instances boot.
@@ -49,6 +51,11 @@ type Host struct {
 	Project        string
 	Zone           string
 	ServiceAccount string
+	// SubscriptionID and ResourceGroup are where an Azure host's instances
+	// run; on Azure, Region is the location, Zone an optional availability
+	// zone, Image a gallery image version and SubnetID a subnet's resource ID.
+	SubscriptionID string
+	ResourceGroup  string
 	// SecurityGroupIDs are the instances' security groups (AWS); empty means
 	// the VPC's default group.
 	SecurityGroupIDs []string
