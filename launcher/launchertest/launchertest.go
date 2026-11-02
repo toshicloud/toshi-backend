@@ -119,24 +119,29 @@ func Run(t *testing.T, newHarness func(t *testing.T) Harness) {
 		}
 	})
 
-	t.Run("Terminate accepts no ids and ids the cloud does not hold", func(t *testing.T) {
+	t.Run("Terminate ends an id once and accepts ids the cloud does not hold", func(t *testing.T) {
 		h := newHarness(t)
 		ctx := context.Background()
 
-		if err := h.Launcher.Terminate(ctx); err != nil {
-			t.Fatalf("Terminate(): %v", err)
+		if ended, err := h.Launcher.Terminate(ctx); err != nil || len(ended) != 0 {
+			t.Fatalf("Terminate() = %v, %v; want no ids and no error", ended, err)
 		}
-		if err := h.Launcher.Terminate(ctx, h.UnknownID); err != nil {
-			t.Fatalf("Terminate(%q), an instance the cloud never had: %v", h.UnknownID, err)
+		if ended, err := h.Launcher.Terminate(ctx, h.UnknownID); err != nil || len(ended) != 0 {
+			t.Fatalf("Terminate(%q), an instance the cloud never had = %v, %v; want no ids and no error", h.UnknownID, ended, err)
 		}
 		inst, err := h.Launcher.Launch(ctx, h.Input("job-terminated-1"))
 		if err != nil {
 			t.Fatalf("Launch: %v", err)
 		}
-		for i := range 2 {
-			if err := h.Launcher.Terminate(ctx, inst.ID); err != nil {
-				t.Fatalf("Terminate(%q) %d: %v", inst.ID, i+1, err)
-			}
+		if ended, err := h.Launcher.Terminate(ctx, inst.ID); err != nil {
+			t.Fatalf("Terminate(%q): %v", inst.ID, err)
+		} else if !slices.Equal(ended, []string{inst.ID}) {
+			t.Fatalf("Terminate(%q) ended %v, want the instance", inst.ID, ended)
+		}
+		// The cloud has the instance on its way out now: a second call ends
+		// nothing and is not an error.
+		if ended, err := h.Launcher.Terminate(ctx, inst.ID); err != nil || len(ended) != 0 {
+			t.Fatalf("second Terminate(%q) = %v, %v; want no ids and no error", inst.ID, ended, err)
 		}
 	})
 

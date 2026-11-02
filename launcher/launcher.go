@@ -87,8 +87,10 @@ type Launcher interface {
 	// List returns every instance this control plane launched for the
 	// host, ended ones included while the cloud still shows them.
 	List(ctx context.Context) ([]Instance, error)
-	// Terminate ends instances; one already gone is not an error.
-	Terminate(ctx context.Context, ids ...string) error
+	// Terminate ends instances and returns the ids this call moved from a
+	// live or stopped state to ending. An id already ending or gone is not
+	// returned, and is not an error.
+	Terminate(ctx context.Context, ids ...string) ([]string, error)
 	// Doctor checks the host's cloud setup without launching anything
 	// (toshi doctor --cloud); spot is whether the host runs spot
 	// instances.
